@@ -127,6 +127,13 @@ public struct FileContextMenuView: View {
         Button("Show in Finder") {
             NSWorkspace.shared.activateFileViewerSelecting([item.url])
         }
+
+        if item.url.path.hasPrefix("/Volumes/") && item.isDirectory {
+            Divider()
+            Button("Eject \(item.displayName)") {
+                appState.ejectVolume(item.url)
+            }
+        }
     }
 
     private var openWithMenu: some View {

@@ -47,12 +47,14 @@ public final class AppState: ObservableObject {
     // MARK: - Services
     private let fileSystem = FileSystemManager.shared
     private let directoryWatcher = DirectoryWatcher()
+    private let volumeWatcher = VolumeWatcher()
     private var cancellables = Set<AnyCancellable>()
 
     public init() {
         setupDefaultLocations()
         setupInitialTab()
         setupDirectoryWatcher()
+        setupVolumeWatcher()
         refreshVolumes()
     }
 
@@ -396,6 +398,39 @@ public final class AppState: ObservableObject {
             let vols = await fileSystem.getMountedVolumes()
             self.mountedVolumes = vols
             self.updateVolumeInfo()
+        }
+    }
+
+    private func setupVolumeWatcher() {
+        volumeWatcher.onVolumeChange = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.refreshVolumes()
+                if self.activeTab.currentURL.path == "/Volumes" {
+                    self.loadCurrentDirectory()
+                }
+                var isDir: ObjCBool = false
+                if !FileManager.default.fileExists(atPath: self.activeTab.currentURL.path, isDirectory: &isDir) {
+                    self.navigate(to: FileManager.default.homeDirectoryForCurrentUser)
+                }
+            }
+        }
+    }
+
+    /// Safely unmount and eject an external volume or pen drive
+    public func ejectVolume(_ url: URL) {
+        Task {
+            do {
+                try await fileSystem.ejectVolume(at: url)
+                await MainActor.run {
+                    self.refreshVolumes()
+                    if self.activeTab.currentURL.path.hasPrefix(url.path) {
+                        self.navigate(to: FileManager.default.homeDirectoryForCurrentUser)
+                    }
+                }
+            } catch {
+                print("Failed to eject volume: \(error)")
+            }
         }
     }
 

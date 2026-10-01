@@ -46,15 +46,30 @@ public struct NavigationSidebar: View {
                 }
 
                 // This PC / Storage Volumes
-                Section("This Mac") {
+                Section {
+                    sidebarItem(
+                        url: URL(fileURLWithPath: "/Volumes"),
+                        icon: "desktopcomputer",
+                        title: "This Mac",
+                        badgeIcon: nil
+                    )
+
                     ForEach(appState.mountedVolumes, id: \.self) { volumeURL in
-                        let name = (try? volumeURL.resourceValues(forKeys: [.volumeNameKey]))?.volumeName ?? volumeURL.lastPathComponent
-                        sidebarItem(
-                            url: volumeURL,
-                            icon: "externaldrive.fill",
-                            title: name.isEmpty ? "Macintosh HD" : name,
-                            badgeIcon: nil
-                        )
+                        volumeSidebarItem(volumeURL: volumeURL)
+                    }
+                } header: {
+                    HStack {
+                        Text("This Mac")
+                        Spacer()
+                        Button(action: {
+                            appState.refreshVolumes()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Refresh connected drives & pen drives")
                     }
                 }
 
@@ -100,6 +115,90 @@ public struct NavigationSidebar: View {
         .contentShape(Rectangle())
         .onTapGesture {
             appState.navigate(to: url)
+        }
+    }
+
+    private func volumeSidebarItem(volumeURL: URL) -> some View {
+        let isSelected = appState.activeTab.currentURL.standardizedFileURL == volumeURL.standardizedFileURL
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsEjectableKey, .volumeIsInternalKey]
+        let vals = try? volumeURL.resourceValues(forKeys: Set(keys))
+        let isRemovable = (vals?.volumeIsRemovable == true) || (vals?.volumeIsEjectable == true)
+        let rawName = vals?.volumeName ?? volumeURL.lastPathComponent
+        let displayName: String
+        if volumeURL.path == "/" {
+            displayName = "Macintosh HD"
+        } else if rawName.isEmpty {
+            displayName = volumeURL.lastPathComponent
+        } else {
+            displayName = rawName
+        }
+
+        let icon = isRemovable ? "externaldrive.connected.to.line.below.fill" : "internaldrive.fill"
+
+        return HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundColor(isSelected ? .accentColor : (isRemovable ? .orange : .secondary))
+                .frame(width: 18)
+
+            Text(displayName)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            if isRemovable {
+                Text("USB")
+                    .font(.system(size: 9, weight: .bold))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color.orange.opacity(0.18))
+                    .foregroundColor(.orange)
+                    .clipShape(Capsule())
+            }
+
+            Spacer()
+
+            if isRemovable {
+                Button(action: {
+                    appState.ejectVolume(volumeURL)
+                }) {
+                    Image(systemName: "eject.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .padding(3)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Eject \(displayName)")
+            }
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            appState.navigate(to: volumeURL)
+        }
+        .contextMenu {
+            Button("Open") {
+                appState.navigate(to: volumeURL)
+            }
+            Button("Open in New Tab") {
+                appState.addTab(at: volumeURL)
+            }
+            if isRemovable {
+                Divider()
+                Button("Eject \(displayName)") {
+                    appState.ejectVolume(volumeURL)
+                }
+            }
+            Divider()
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(volumeURL.path, forType: .string)
+            }
         }
     }
 

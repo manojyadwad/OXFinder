@@ -251,10 +251,57 @@ public actor FileSystemManager {
 
     // MARK: - Volumes & Storage Information
 
-    /// Get all mounted storage volumes on macOS
+    /// Get all mounted storage volumes on macOS (Internal drives, external SSDs, USB pen drives)
     public func getMountedVolumes() -> [URL] {
-        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsInternalKey]
-        return fileManager.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsInternalKey, .volumeIsEjectableKey]
+        var volumes = fileManager.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+
+        // Also inspect /Volumes directly to ensure no pen drive or disk image is missed
+        let volDir = URL(fileURLWithPath: "/Volumes")
+        if let volContents = try? fileManager.contentsOfDirectory(at: volDir, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) {
+            for volURL in volContents {
+                // If it is a symlink to "/" (like /Volumes/Macintosh HD -> /), skip
+                let isRootSymlink = ((try? volURL.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true) &&
+                    ((try? fileManager.destinationOfSymbolicLink(atPath: volURL.path)) == "/" || volURL.resolvingSymlinksInPath().path == "/")
+                if isRootSymlink { continue }
+
+                let matchesExisting = volumes.contains { v in
+                    v.path == volURL.path || v.standardizedFileURL.path == volURL.standardizedFileURL.path
+                }
+                if !matchesExisting {
+                    volumes.append(volURL)
+                }
+            }
+        }
+
+        // Ensure root "/" is included
+        let rootURL = URL(fileURLWithPath: "/")
+        if !volumes.contains(where: { $0.path == "/" }) {
+            volumes.insert(rootURL, at: 0)
+        }
+
+        // Sort: root drive ("/") first, followed by removable pen drives / external disks, then other volumes
+        return volumes.sorted { v1, v2 in
+            if v1.path == "/" { return true }
+            if v2.path == "/" { return false }
+
+            let vals1 = try? v1.resourceValues(forKeys: Set(keys))
+            let vals2 = try? v2.resourceValues(forKeys: Set(keys))
+            let rem1 = (vals1?.volumeIsRemovable == true) || (vals1?.volumeIsEjectable == true)
+            let rem2 = (vals2?.volumeIsRemovable == true) || (vals2?.volumeIsEjectable == true)
+
+            if rem1 != rem2 {
+                return rem1 // Prioritize removable pen drives right after main disk
+            }
+            let n1 = vals1?.volumeName ?? v1.lastPathComponent
+            let n2 = vals2?.volumeName ?? v2.lastPathComponent
+            return n1.localizedStandardCompare(n2) == .orderedAscending
+        }
+    }
+
+    /// Eject a removable volume or pen drive
+    public func ejectVolume(at url: URL) throws {
+        try NSWorkspace.shared.unmountAndEjectDevice(at: url)
     }
 
     /// Calculate free and total capacity for a volume or folder URL
