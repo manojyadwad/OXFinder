@@ -1,3 +1,32 @@
+# Release Notes - OX Finder v1.1.0
+
+**Release Date:** October 1, 2026  
+**Target Platform:** macOS 13.0+ (Ventura, Sonoma, Sequoia)  
+**Architecture:** Universal (Apple Silicon M1/M2/M3/M4 & Intel x86_64)  
+**Author & Owner:** Manoj B Yadwad  
+**License:** GNU General Public License v3.0 (GPL-3.0)
+
+---
+
+## What's New in v1.1.0
+
+### Real-Time USB Pen Drive & Storage Volume Detection
+- **Live Mount/Unmount Monitoring (`VolumeWatcher`)**:
+  - Automatically detects when a USB pen drive, external SSD, or disk image is connected to or disconnected from the Mac.
+  - Subscribes to native `NSWorkspace.didMountNotification`, `didUnmountNotification`, and `didRenameVolumeNotification` events.
+  - Backed by kernel file descriptor monitoring on `/Volumes` for instant zero-delay UI refreshes.
+- **Enhanced Sidebar & Drive Controls**:
+  - **Dedicated Pen Drive Styling**: Removable drives are clearly highlighted with an external drive icon and an orange **USB** badge.
+  - **One-Click Eject (`⏏`)**: Safely unmount and eject pen drives directly from the sidebar or via the right-click context menu.
+  - **"This Mac" Overview**: Added a browsable "This Mac" hub row pointing to `/Volumes` to view all connected drives in the main explorer window.
+  - **Manual Refresh Button (`⟳`)**: Added a convenient re-scan button in the sidebar "This Mac" header.
+- **Graceful Unmount Handling**:
+  - If an active directory was located on a drive that is unplugged, OX Finder automatically navigates back to your Home directory cleanly.
+- **Official Social Media Promotional Assets**:
+  - Added official marketing images for Desktop (16:9), Mobile Stories/Reels (9:16), and Instagram Feed (1:1 Square & 4:5 Portrait).
+
+---
+
 # Release Notes - OX Finder v1.0.0
 
 **Release Date:** September 29, 2026  
