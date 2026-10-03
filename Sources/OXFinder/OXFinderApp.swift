@@ -9,6 +9,9 @@ struct OXFinderApp: App {
         WindowGroup {
             MainShellView()
                 .navigationTitle("")
+                .onOpenURL { url in
+                    AppDelegate.handleOpenURL(url)
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
@@ -76,14 +79,70 @@ struct OXFinderApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        NSApp.servicesProvider = self
 
         // Set Dock and app icon to the custom logo
         if let icon = AppLogoHelper.logoImage {
             NSApp.applicationIconImage = icon
         }
+
+        // Install "Open in OX Finder" Quick Action into ~/Library/Services
+        QuickActionInstaller.installQuickActionIfNeeded()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            AppDelegate.handleOpenURL(url)
+        }
+    }
+
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        let url = URL(fileURLWithPath: filename)
+        AppDelegate.handleOpenURL(url)
+        return true
+    }
+
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        for filename in filenames {
+            let url = URL(fileURLWithPath: filename)
+            AppDelegate.handleOpenURL(url)
+        }
+    }
+
+    @objc func openInOXFinderService(_ pboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        guard let items = pboard.pasteboardItems else { return }
+        for item in items {
+            if let urlString = item.string(forType: .fileURL), let url = URL(string: urlString) {
+                AppDelegate.handleOpenURL(url)
+            }
+        }
+    }
+
+    /// Central handler to navigate to or reveal any file, folder, application, or shortcut
+    public static func handleOpenURL(_ rawURL: URL) {
+        let url = rawURL.standardizedFileURL
+
+        Task { @MainActor in
+            NSApp.activate(ignoringOtherApps: true)
+
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+            guard exists else { return }
+
+            if isDir.boolValue && !url.pathExtension.elementsEqual("app") {
+                // Folder / Directory: navigate directly inside
+                AppState.shared.navigate(to: url)
+            } else {
+                // File, .app bundle, or shortcut: navigate to parent directory and select the item
+                let parentDir = url.deletingLastPathComponent()
+                AppState.shared.navigate(to: parentDir)
+                AppState.shared.selectedURLs = [url]
+                AppState.shared.updatePreviewSelection()
+            }
+        }
     }
 }
