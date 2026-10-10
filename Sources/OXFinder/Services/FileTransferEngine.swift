@@ -49,6 +49,14 @@ public actor FileTransferEngine {
         progress: TransferProgressState,
         conflictResolution: @Sendable (URL, URL) async -> ConflictResolution
     ) async throws -> [URL] {
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled],
+            reason: "OX Finder File Transfer"
+        )
+        defer {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
+
         let fm = FileManager.default
         var processedResults: [URL] = []
         var completedBytesTotal: Int64 = 0
