@@ -41,6 +41,7 @@ public final class AppState: ObservableObject {
     // MARK: - Conflict & Transfer Dialog State
     @Published public var activeConflict: ConflictPromptState? = nil
     @Published public var activeTransfer: TransferProgressState? = nil
+    @Published public var propertiesItem: FileItem? = nil
 
     // MARK: - Status Bar Info
     @Published public var volumeFreeSpaceFormatted: String = ""
@@ -359,6 +360,26 @@ public final class AppState: ObservableObject {
             } catch {
                 print("Failed to duplicate: \(error)")
             }
+        }
+    }
+
+    // MARK: - Properties Dialog
+    public func showProperties(for item: FileItem) {
+        self.propertiesItem = item
+    }
+
+    public func showCurrentFolderProperties() {
+        self.propertiesItem = FileItem(url: activeTab.currentURL)
+    }
+
+    public func showSelectionProperties() {
+        if let firstURL = selectedURLs.first,
+           let item = currentItems.first(where: { $0.url == firstURL }) {
+            self.propertiesItem = item
+        } else if let firstURL = selectedURLs.first {
+            self.propertiesItem = FileItem(url: firstURL)
+        } else {
+            showCurrentFolderProperties()
         }
     }
 

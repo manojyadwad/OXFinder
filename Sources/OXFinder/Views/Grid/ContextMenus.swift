@@ -150,6 +150,12 @@ public struct FileContextMenuView: View {
                 appState.ejectVolume(item.url)
             }
         }
+
+        Divider()
+
+        Button("Properties") {
+            appState.showProperties(for: item)
+        }
     }
 
     private var openWithMenu: some View {
@@ -290,6 +296,12 @@ public struct EmptyCanvasContextMenuView: View {
 
         Button("Open in Terminal") {
             AppOpenService.openInTerminal(folderURL: appState.activeTab.currentURL)
+        }
+
+        Divider()
+
+        Button("Properties") {
+            appState.showCurrentFolderProperties()
         }
     }
 }

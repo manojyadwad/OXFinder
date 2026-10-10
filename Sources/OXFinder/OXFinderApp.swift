@@ -28,6 +28,13 @@ struct OXFinderApp: App {
                     AppState.shared.createNewFolder()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Properties") {
+                    AppState.shared.showSelectionProperties()
+                }
+                .keyboardShortcut("i", modifiers: .command)
             }
 
             CommandGroup(replacing: .pasteboard) {

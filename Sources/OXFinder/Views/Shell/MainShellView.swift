@@ -83,6 +83,19 @@ public struct MainShellView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .zIndex(200)
             }
+
+            // File & Folder Properties Dialog (Windows 11 Explorer Properties)
+            if let propItem = appState.propertiesItem {
+                FilePropertiesModal(
+                    item: propItem,
+                    appState: appState,
+                    onDismiss: {
+                        appState.propertiesItem = nil
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .zIndex(250)
+            }
         }
         .onAppear {
             sidebarWidth = CGFloat(storedSidebarWidth)
@@ -198,6 +211,13 @@ struct HiddenGlobalKeyHandler: NSViewRepresentable {
                 if flags == .command && event.charactersIgnoringModifiers == "a" {
                     appState.selectedURLs = Set(appState.currentItems.map { $0.url })
                     appState.updatePreviewSelection()
+                    return nil
+                }
+
+                // Option + Enter (Alt+Enter) or Cmd + I: Properties Dialog
+                if (flags.contains(.option) && (event.keyCode == 36 || event.keyCode == 76)) ||
+                   (flags == .command && event.charactersIgnoringModifiers == "i") {
+                    appState.showSelectionProperties()
                     return nil
                 }
 

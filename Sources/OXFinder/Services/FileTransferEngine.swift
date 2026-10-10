@@ -185,7 +185,11 @@ public actor FileTransferEngine {
             return
         }
 
-        // Chunked file stream
+        // Safe chunked copy using modern Swift FileHandle with try catch and fallback
+        if fm.fileExists(atPath: destination.path) {
+            try? fm.removeItem(at: destination)
+        }
+
         guard let readHandle = try? FileHandle(forReadingFrom: source) else {
             try fm.copyItem(at: source, to: destination)
             completedBytesTotal += fileSize
@@ -200,13 +204,8 @@ public actor FileTransferEngine {
         }
         defer { try? readHandle.close() }
 
-        if fm.fileExists(atPath: destination.path) {
-            try? fm.removeItem(at: destination)
-        }
         fm.createFile(atPath: destination.path, contents: nil, attributes: nil)
-
         guard let writeHandle = try? FileHandle(forWritingTo: destination) else {
-            try? readHandle.close()
             try fm.copyItem(at: source, to: destination)
             completedBytesTotal += fileSize
             processedItemsCount += 1
@@ -218,52 +217,61 @@ public actor FileTransferEngine {
             }
             return
         }
+        defer { try? writeHandle.close() }
 
         var isAborted = false
 
-        while true {
-            if progress.isCancelled {
-                isAborted = true
-                break
-            }
+        do {
+            while true {
+                if progress.isCancelled {
+                    isAborted = true
+                    break
+                }
 
-            let data = readHandle.readData(ofLength: bufferSize)
-            if data.isEmpty {
-                break
-            }
+                guard let data = try readHandle.read(upToCount: bufferSize), !data.isEmpty else {
+                    break
+                }
 
-            writeHandle.write(data)
-            completedBytesTotal += Int64(data.count)
+                try writeHandle.write(contentsOf: data)
+                completedBytesTotal += Int64(data.count)
 
-            let now = CFAbsoluteTimeGetCurrent()
-            recentBytes.append((now, completedBytesTotal))
-            recentBytes.removeAll(where: { now - $0.time > 2.0 })
+                let now = CFAbsoluteTimeGetCurrent()
+                recentBytes.append((now, completedBytesTotal))
+                recentBytes.removeAll(where: { now - $0.time > 2.0 })
 
-            var speed: Double = 0
-            if recentBytes.count >= 2, let first = recentBytes.first {
-                let dt = now - first.time
-                let db = completedBytesTotal - first.bytes
-                if dt > 0.1 {
-                    speed = Double(db) / dt
+                var speed: Double = 0
+                if recentBytes.count >= 2, let first = recentBytes.first {
+                    let dt = now - first.time
+                    let db = completedBytesTotal - first.bytes
+                    if dt > 0.1 {
+                        speed = Double(db) / dt
+                    }
+                }
+
+                let remainingBytes = max(0, progress.totalBytes - completedBytesTotal)
+                let eta = speed > 0 ? (Double(remainingBytes) / speed) : 0
+                let bytesSnapshot = completedBytesTotal
+                let speedSnapshot = speed
+                let etaSnapshot = eta
+
+                await MainActor.run {
+                    progress.completedBytes = min(progress.totalBytes, bytesSnapshot)
+                    if speedSnapshot > 0 {
+                        progress.bytesPerSecond = speedSnapshot
+                        progress.estimatedSecondsRemaining = etaSnapshot
+                    }
                 }
             }
-
-            let remainingBytes = max(0, progress.totalBytes - completedBytesTotal)
-            let eta = speed > 0 ? (Double(remainingBytes) / speed) : 0
-            let bytesSnapshot = completedBytesTotal
-            let speedSnapshot = speed
-            let etaSnapshot = eta
-
-            await MainActor.run {
-                progress.completedBytes = min(progress.totalBytes, bytesSnapshot)
-                if speedSnapshot > 0 {
-                    progress.bytesPerSecond = speedSnapshot
-                    progress.estimatedSecondsRemaining = etaSnapshot
-                }
+        } catch {
+            // Safe fallback if chunk streaming encounters unexpected I/O error
+            try? writeHandle.close()
+            try? readHandle.close()
+            if fm.fileExists(atPath: destination.path) {
+                try? fm.removeItem(at: destination)
             }
+            try fm.copyItem(at: source, to: destination)
+            completedBytesTotal += fileSize
         }
-
-        try? writeHandle.close()
 
         if isAborted {
             try? fm.removeItem(at: destination)

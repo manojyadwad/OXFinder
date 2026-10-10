@@ -61,6 +61,10 @@ public struct NavigationSidebar: View {
                             Button("Show in Finder") {
                                 NSWorkspace.shared.activateFileViewerSelecting([url])
                             }
+                            Divider()
+                            Button("Properties") {
+                                appState.showProperties(for: FileItem(url: url))
+                            }
                         }
                     }
                 } header: {
@@ -246,6 +250,10 @@ public struct NavigationSidebar: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(volumeURL.path, forType: .string)
             }
+            Divider()
+            Button("Properties") {
+                appState.showProperties(for: FileItem(url: volumeURL))
+            }
         }
     }
 
@@ -321,6 +329,10 @@ public struct DirectoryTreeNodeView: View {
                 }
                 Button("Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                Divider()
+                Button("Properties") {
+                    appState.showProperties(for: FileItem(url: url))
                 }
             }
 

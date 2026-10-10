@@ -66,6 +66,11 @@ public struct CommandToolbar: View {
             }
             .help("Move to Trash (Cmd+Backspace)")
 
+            toolbarButton(title: "Properties", icon: "info.circle", disabled: false) {
+                appState.showSelectionProperties()
+            }
+            .help("Properties (Alt+Enter or Cmd+I)")
+
             Divider()
                 .frame(height: 18)
 
