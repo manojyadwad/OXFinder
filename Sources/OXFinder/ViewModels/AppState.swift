@@ -38,8 +38,9 @@ public final class AppState: ObservableObject {
     @Published public var previewMetadata: FileDetailedMetadata? = nil
     @Published public var viewerItem: FileItem? = nil
 
-    // MARK: - Conflict Dialog State
+    // MARK: - Conflict & Transfer Dialog State
     @Published public var activeConflict: ConflictPromptState? = nil
+    @Published public var activeTransfer: TransferProgressState? = nil
 
     // MARK: - Status Bar Info
     @Published public var volumeFreeSpaceFormatted: String = ""
@@ -210,25 +211,74 @@ public final class AppState: ObservableObject {
         guard !urlsToProcess.isEmpty else { return }
         let isCut = clipboard.isCut
 
+        performFileTransfer(sourceURLs: urlsToProcess, into: targetFolder, isCut: isCut)
+    }
+
+    /// Primary transfer orchestrator displaying progress modal, handling conflict resolution, and updating directory view
+    public func performFileTransfer(sourceURLs: [URL], into destinationFolder: URL, isCut: Bool) {
+        guard !sourceURLs.isEmpty else { return }
+
         Task {
+            let metrics = await FileTransferEngine.shared.calculateTransferMetrics(urls: sourceURLs)
+            let sourceFolder = sourceURLs.first?.deletingLastPathComponent().lastPathComponent ?? "Source"
+            let destFolder = destinationFolder.path == "/" ? "Macintosh HD" : destinationFolder.lastPathComponent
+
+            let progress = TransferProgressState(
+                isCut: isCut,
+                totalItems: metrics.totalItems,
+                totalBytes: metrics.totalBytes,
+                sourceFolderName: sourceFolder,
+                destinationFolderName: destFolder
+            )
+
+            await MainActor.run {
+                self.activeTransfer = progress
+            }
+
             do {
-                _ = try await fileSystem.paste(
-                    sourceURLs: urlsToProcess,
-                    into: targetFolder,
+                let resultingURLs = try await FileTransferEngine.shared.transfer(
+                    sourceURLs: sourceURLs,
+                    into: destinationFolder,
                     isCut: isCut,
+                    progress: progress,
                     conflictResolution: { source, target in
                         await self.promptConflictResolution(source: source, target: target)
                     }
                 )
 
-                if isCut {
-                    self.clipboard = .none
+                // Brief pause so user sees completion before modal dismiss
+                try? await Task.sleep(nanoseconds: 200_000_000)
+
+                await MainActor.run {
+                    self.activeTransfer = nil
+                    if isCut {
+                        self.clipboard = .none
+                    }
+                    self.loadCurrentDirectory()
+                    if destinationFolder.standardizedFileURL.path == self.activeTab.currentURL.standardizedFileURL.path {
+                        self.selectedURLs = Set(resultingURLs)
+                        self.updatePreviewSelection()
+                    }
+                    self.updateVolumeInfo()
                 }
-                self.loadCurrentDirectory()
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.activeTransfer = nil
+                    self.loadCurrentDirectory()
+                }
             } catch {
-                print("Error during paste operation: \(error)")
+                print("Error during file transfer: \(error)")
+                await MainActor.run {
+                    self.activeTransfer = nil
+                    self.loadCurrentDirectory()
+                }
             }
         }
+    }
+
+    public func cancelActiveTransfer() {
+        activeTransfer?.isCancelled = true
+        activeTransfer = nil
     }
 
     public func promptConflictResolution(source: URL, target: URL) async -> ConflictResolution {

@@ -71,6 +71,18 @@ public struct MainShellView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     .zIndex(100)
             }
+
+            // File Transfer Progress Modal (Windows 11 Explorer Progress Dialog)
+            if let transfer = appState.activeTransfer {
+                FileTransferProgressModal(
+                    progress: transfer,
+                    onCancel: {
+                        appState.cancelActiveTransfer()
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(200)
+            }
         }
         .onAppear {
             sidebarWidth = CGFloat(storedSidebarWidth)

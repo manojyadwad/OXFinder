@@ -120,23 +120,11 @@ public struct WindowsTabBarView: View {
 
         group.notify(queue: .main) {
             guard !droppedURLs.isEmpty else { return }
-            Task {
-                do {
-                    _ = try await FileSystemManager.shared.paste(
-                        sourceURLs: droppedURLs,
-                        into: targetTab.currentURL,
-                        isCut: false,
-                        conflictResolution: { source, target in
-                            await self.appState.promptConflictResolution(source: source, target: target)
-                        }
-                    )
-                    if self.appState.activeTabId == targetTab.id {
-                        self.appState.loadCurrentDirectory()
-                    }
-                } catch {
-                    print("Error dropping file onto tab: \(error)")
-                }
-            }
+            self.appState.performFileTransfer(
+                sourceURLs: droppedURLs,
+                into: targetTab.currentURL,
+                isCut: false
+            )
         }
         return true
     }

@@ -54,21 +54,7 @@ public struct FileBrowserContainerView: View {
 
         group.notify(queue: .main) {
             guard !droppedURLs.isEmpty else { return }
-            Task {
-                do {
-                    _ = try await FileSystemManager.shared.paste(
-                        sourceURLs: droppedURLs,
-                        into: self.appState.activeTab.currentURL,
-                        isCut: false,
-                        conflictResolution: { source, target in
-                            await self.appState.promptConflictResolution(source: source, target: target)
-                        }
-                    )
-                    self.appState.loadCurrentDirectory()
-                } catch {
-                    print("Error dropping files: \(error)")
-                }
-            }
+            self.appState.performFileTransfer(sourceURLs: droppedURLs, into: self.appState.activeTab.currentURL, isCut: false)
         }
         return true
     }
