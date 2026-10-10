@@ -498,6 +498,41 @@ public final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - Quick Access Management
+
+    private let quickAccessStorageKey = "OXFinder_PinnedQuickAccessPaths"
+
+    public func isPinnedToQuickAccess(url: URL) -> Bool {
+        let stdPath = url.standardizedFileURL.path
+        return quickAccessURLs.contains { $0.standardizedFileURL.path == stdPath }
+    }
+
+    public func pinToQuickAccess(url: URL) {
+        let stdPath = url.standardizedFileURL.path
+        guard !quickAccessURLs.contains(where: { $0.standardizedFileURL.path == stdPath }) else { return }
+        quickAccessURLs.append(url.standardizedFileURL)
+        saveQuickAccess()
+    }
+
+    public func unpinFromQuickAccess(url: URL) {
+        let stdPath = url.standardizedFileURL.path
+        quickAccessURLs.removeAll { $0.standardizedFileURL.path == stdPath }
+        saveQuickAccess()
+    }
+
+    public func toggleQuickAccessPin(for url: URL) {
+        if isPinnedToQuickAccess(url: url) {
+            unpinFromQuickAccess(url: url)
+        } else {
+            pinToQuickAccess(url: url)
+        }
+    }
+
+    private func saveQuickAccess() {
+        let pathStrings = quickAccessURLs.map { $0.path }
+        UserDefaults.standard.set(pathStrings, forKey: quickAccessStorageKey)
+    }
+
     // MARK: - Setup Helpers
 
     private func setupInitialTab() {
@@ -512,6 +547,18 @@ public final class AppState: ObservableObject {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
 
+        if let savedPaths = UserDefaults.standard.stringArray(forKey: quickAccessStorageKey), !savedPaths.isEmpty {
+            let loadedURLs = savedPaths.compactMap { path -> URL? in
+                let url = URL(fileURLWithPath: path)
+                var isDir: ObjCBool = false
+                return (fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue) ? url : nil
+            }
+            if !loadedURLs.isEmpty {
+                quickAccessURLs = loadedURLs
+                return
+            }
+        }
+
         quickAccessURLs = [
             home,
             fm.urls(for: .desktopDirectory, in: .userDomainMask).first ?? home.appendingPathComponent("Desktop"),
@@ -521,5 +568,6 @@ public final class AppState: ObservableObject {
             fm.urls(for: .moviesDirectory, in: .userDomainMask).first ?? home.appendingPathComponent("Movies"),
             fm.urls(for: .musicDirectory, in: .userDomainMask).first ?? home.appendingPathComponent("Music")
         ]
+        saveQuickAccess()
     }
 }

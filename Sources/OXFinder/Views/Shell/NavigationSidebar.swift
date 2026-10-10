@@ -34,7 +34,7 @@ public struct NavigationSidebar: View {
 
             List {
                 // Quick Access / Pinned Folders
-                Section("Quick access") {
+                Section {
                     ForEach(appState.quickAccessURLs, id: \.self) { url in
                         sidebarItem(
                             url: url,
@@ -42,7 +42,54 @@ public struct NavigationSidebar: View {
                             title: FileManager.default.displayName(atPath: url.path),
                             badgeIcon: "pin.fill"
                         )
+                        .contextMenu {
+                            Button("Open") {
+                                appState.navigate(to: url)
+                            }
+                            Button("Open in New Tab") {
+                                appState.addTab(at: url)
+                            }
+                            Divider()
+                            Button("Unpin from Quick access") {
+                                appState.unpinFromQuickAccess(url: url)
+                            }
+                            Divider()
+                            Button("Copy Path") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(url.path, forType: .string)
+                            }
+                            Button("Show in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting([url])
+                            }
+                        }
                     }
+                } header: {
+                    HStack {
+                        Text("Quick access")
+                        Spacer()
+                    }
+                }
+                .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                    var droppedURLs: [URL] = []
+                    let group = DispatchGroup()
+                    for provider in providers {
+                        group.enter()
+                        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                            if let u = url {
+                                var isDir: ObjCBool = false
+                                if FileManager.default.fileExists(atPath: u.path, isDirectory: &isDir) && isDir.boolValue {
+                                    droppedURLs.append(u)
+                                }
+                            }
+                            group.leave()
+                        }
+                    }
+                    group.notify(queue: .main) {
+                        for dir in droppedURLs {
+                            appState.pinToQuickAccess(url: dir)
+                        }
+                    }
+                    return true
                 }
 
                 // This PC / Storage Volumes
@@ -249,6 +296,32 @@ public struct DirectoryTreeNodeView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 appState.navigate(to: url)
+            }
+            .contextMenu {
+                Button("Open") {
+                    appState.navigate(to: url)
+                }
+                Button("Open in New Tab") {
+                    appState.addTab(at: url)
+                }
+                Divider()
+                if appState.isPinnedToQuickAccess(url: url) {
+                    Button("Unpin from Quick access") {
+                        appState.unpinFromQuickAccess(url: url)
+                    }
+                } else {
+                    Button("Pin to Quick access") {
+                        appState.pinToQuickAccess(url: url)
+                    }
+                }
+                Divider()
+                Button("Copy Path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.path, forType: .string)
+                }
+                Button("Show in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
             }
 
             if isExpanded {

@@ -12,6 +12,27 @@ public struct CommandToolbar: View {
                 appState.createNewFolder()
             }
 
+            // Pin to Quick Access
+            let targetURLForPin: URL = {
+                if appState.selectedURLs.count == 1, let selected = appState.selectedURLs.first {
+                    var isDir: ObjCBool = false
+                    if FileManager.default.fileExists(atPath: selected.path, isDirectory: &isDir) && isDir.boolValue && !selected.pathExtension.elementsEqual("app") {
+                        return selected
+                    }
+                }
+                return appState.activeTab.currentURL
+            }()
+            let isPinned = appState.isPinnedToQuickAccess(url: targetURLForPin)
+
+            toolbarButton(
+                title: isPinned ? "Unpin" : "Pin to Quick access",
+                icon: isPinned ? "pin.slash" : "pin",
+                disabled: false
+            ) {
+                appState.toggleQuickAccessPin(for: targetURLForPin)
+            }
+            .help(isPinned ? "Unpin '\(targetURLForPin.lastPathComponent)' from Quick access" : "Pin '\(targetURLForPin.lastPathComponent)' to Quick access")
+
             Divider()
                 .frame(height: 18)
 

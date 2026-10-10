@@ -72,6 +72,22 @@ public struct FileContextMenuView: View {
             appState.openItem(item)
         }
 
+        if item.isDirectory && !item.isPackage {
+            Button("Open in New Tab") {
+                appState.addTab(at: item.url)
+            }
+
+            if appState.isPinnedToQuickAccess(url: item.url) {
+                Button("Unpin from Quick access") {
+                    appState.unpinFromQuickAccess(url: item.url)
+                }
+            } else {
+                Button("Pin to Quick access") {
+                    appState.pinToQuickAccess(url: item.url)
+                }
+            }
+        }
+
         if item.isImage {
             Button("View in Image Viewer") {
                 appState.viewerItem = item
@@ -238,6 +254,18 @@ public struct EmptyCanvasContextMenuView: View {
 
         Button("Refresh") {
             appState.loadCurrentDirectory()
+        }
+
+        Divider()
+
+        if appState.isPinnedToQuickAccess(url: appState.activeTab.currentURL) {
+            Button("Unpin from Quick access") {
+                appState.unpinFromQuickAccess(url: appState.activeTab.currentURL)
+            }
+        } else {
+            Button("Pin current folder to Quick access") {
+                appState.pinToQuickAccess(url: appState.activeTab.currentURL)
+            }
         }
 
         Divider()
