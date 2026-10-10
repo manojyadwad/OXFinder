@@ -26,14 +26,21 @@ public struct StatusBarView: View {
                 Divider()
                     .frame(height: 12)
 
-                HStack(spacing: 4) {
-                    Image(systemName: "internaldrive")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                    Text(appState.volumeFreeSpaceFormatted)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                Button(action: {
+                    appState.showCurrentFolderProperties()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: appState.currentVolumeDetail?.isRemovable == true ? "externaldrive.fill" : "internaldrive.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(appState.currentVolumeDetail?.isRemovable == true ? .orange : .secondary)
+                        Text(appState.volumeFreeSpaceFormatted)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(PlainButtonStyle())
+                .help(storageTooltip)
             }
 
             Spacer()
@@ -85,5 +92,12 @@ public struct StatusBarView: View {
         } else {
             return "\(count) items selected  \(sizeStr)"
         }
+    }
+
+    private var storageTooltip: String {
+        guard let info = appState.currentVolumeDetail else {
+            return "Drive Space\nClick to view Drive Properties"
+        }
+        return "\(info.volumeName) (\(info.formatName))\nTotal Space: \(info.totalFormatted) (\(info.totalExactBytesFormatted) bytes)\nUsed Space:  \(info.usedFormatted) (\(info.usedExactBytesFormatted) bytes)\nFree Space:  \(info.freeFormatted) (\(info.freeExactBytesFormatted) bytes)\n\nClick to view full Drive Properties"
     }
 }

@@ -43,7 +43,8 @@ public final class AppState: ObservableObject {
     @Published public var activeTransfer: TransferProgressState? = nil
     @Published public var propertiesItem: FileItem? = nil
 
-    // MARK: - Status Bar Info
+    // MARK: - Status Bar Info & Volume Storage
+    @Published public var currentVolumeDetail: VolumeStorageDetail? = nil
     @Published public var volumeFreeSpaceFormatted: String = ""
 
     // MARK: - Services
@@ -508,12 +509,11 @@ public final class AppState: ObservableObject {
     private func updateVolumeInfo() {
         Task {
             if let info = await fileSystem.getVolumeStorageInfo(for: activeTab.currentURL) {
-                let formatter = ByteCountFormatter()
-                formatter.countStyle = .file
-                let freeStr = formatter.string(fromByteCount: info.freeBytes)
-                let totalStr = formatter.string(fromByteCount: info.totalBytes)
-                self.volumeFreeSpaceFormatted = "\(freeStr) free of \(totalStr)"
+                self.currentVolumeDetail = info
+                let pct = Int(round(info.usedPercentage * 100))
+                self.volumeFreeSpaceFormatted = "\(info.freeFormatted) free of \(info.totalFormatted) (\(pct)% used)"
             } else {
+                self.currentVolumeDetail = nil
                 self.volumeFreeSpaceFormatted = ""
             }
         }

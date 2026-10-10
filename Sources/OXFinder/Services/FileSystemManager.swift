@@ -304,14 +304,43 @@ public actor FileSystemManager {
         try NSWorkspace.shared.unmountAndEjectDevice(at: url)
     }
 
-    /// Calculate free and total capacity for a volume or folder URL
-    public func getVolumeStorageInfo(for url: URL) -> (freeBytes: Int64, totalBytes: Int64)? {
-        guard let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey]) else {
-            return nil
+    /// Calculate total, used, and free capacity for any volume or folder
+    public func getVolumeStorageInfo(for url: URL) -> VolumeStorageDetail? {
+        let path = url.path
+        var stat = statfs()
+        guard statfs(path, &stat) == 0 else { return nil }
+
+        let blockSize = Int64(stat.f_bsize)
+        let totalBlocks = Int64(stat.f_blocks)
+        let freeBlocks = Int64(stat.f_bavail)
+        let totalBytes = totalBlocks * blockSize
+        let freeBytes = freeBlocks * blockSize
+        let usedBytes = max(0, totalBytes - freeBytes)
+
+        let keys: [URLResourceKey] = [
+            .volumeNameKey,
+            .volumeIsRemovableKey,
+            .volumeIsEjectableKey,
+            .volumeLocalizedFormatDescriptionKey
+        ]
+        let vals = try? url.resourceValues(forKeys: Set(keys))
+
+        let volName = vals?.volumeName ?? (url.path == "/" ? "Macintosh HD" : url.lastPathComponent)
+        let isRemovable = (vals?.volumeIsRemovable == true) || (vals?.volumeIsEjectable == true)
+
+        let typeName = withUnsafePointer(to: &stat.f_fstypename) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MFSTYPENAMELEN)) { String(cString: $0).uppercased() }
         }
-        let free = values.volumeAvailableCapacityForImportantUsage ?? 0
-        let total = Int64(values.volumeTotalCapacity ?? 0)
-        return (free, total)
+        let format = vals?.volumeLocalizedFormatDescription ?? typeName
+
+        return VolumeStorageDetail(
+            freeBytes: freeBytes,
+            usedBytes: usedBytes,
+            totalBytes: totalBytes,
+            formatName: format,
+            volumeName: volName,
+            isRemovable: isRemovable
+        )
     }
 
     /// Recursive search within directory

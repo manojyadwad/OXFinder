@@ -173,9 +173,173 @@ public struct FilePropertiesModal: View {
         }
     }
 
+    // MARK: - Drive / Volume Storage Detail
+    @State private var volumeDetail: VolumeStorageDetail? = nil
+    @State private var isDriveVolume: Bool = false
+
     // MARK: - General Tab
 
     private var generalTabView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if isDriveVolume, let vol = volumeDetail {
+                // Dedicated Windows 11 Drive Properties View
+                drivePropertiesView(vol: vol)
+            } else {
+                // Standard File & Folder Properties View
+                standardGeneralView
+            }
+        }
+    }
+
+    private func drivePropertiesView(vol: VolumeStorageDetail) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header: Drive Icon & Label
+            HStack(spacing: 12) {
+                Image(nsImage: item.systemIcon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(vol.volumeName)
+                        .font(.system(size: 14, weight: .bold))
+                    Text(vol.isRemovable ? "Removable USB Drive" : "Local Disk")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                if vol.isRemovable {
+                    Button(action: {
+                        appState.ejectVolume(item.url)
+                        onDismiss()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "eject.fill")
+                            Text("Eject")
+                        }
+                        .font(.system(size: 11))
+                    }
+                    .buttonStyle(BorderedButtonStyle())
+                }
+            }
+
+            Divider()
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                GridRow {
+                    Text("Type:")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .gridColumnAlignment(.trailing)
+                    Text(vol.isRemovable ? "Removable Disk" : "Local Fixed Disk")
+                        .font(.system(size: 11))
+                }
+
+                GridRow {
+                    Text("File system:")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    Text(vol.formatName)
+                        .font(.system(size: 11, weight: .medium))
+                }
+            }
+
+            Divider()
+
+            // Windows 11 Storage Breakdown
+            VStack(alignment: .leading, spacing: 8) {
+                // Used Space Row
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.blue)
+                        .frame(width: 12, height: 12)
+                    Text("Used space:")
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text("\(vol.usedFormatted)")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("(\(vol.usedExactBytesFormatted) bytes)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                // Free Space Row
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.purple.opacity(0.8))
+                        .frame(width: 12, height: 12)
+                    Text("Free space:")
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text("\(vol.freeFormatted)")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("(\(vol.freeExactBytesFormatted) bytes)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Divider()
+
+                // Total Capacity Row
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.primary.opacity(0.7))
+                        .frame(width: 12, height: 12)
+                    Text("Capacity (Total):")
+                        .font(.system(size: 11, weight: .bold))
+                    Spacer()
+                    Text("\(vol.totalFormatted)")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("(\(vol.totalExactBytesFormatted) bytes)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(10)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            // Visual Dual-Tone Storage Bar (Windows 11 Explorer Style)
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geo in
+                    HStack(spacing: 1) {
+                        // Used Bar
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(
+                                LinearGradient(colors: [Color.blue, Color.cyan], startPoint: .leading, endPoint: .trailing)
+                            )
+                            .frame(width: max(2, geo.size.width * CGFloat(vol.usedPercentage)), height: 16)
+
+                        // Free Bar
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(
+                                LinearGradient(colors: [Color.purple.opacity(0.7), Color.pink.opacity(0.6)], startPoint: .leading, endPoint: .trailing)
+                            )
+                            .frame(width: max(2, geo.size.width * CGFloat(vol.freePercentage)), height: 16)
+                    }
+                }
+                .frame(height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                HStack {
+                    Text("\(Int(round(vol.usedPercentage * 100)))% Used")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.blue)
+
+                    Spacer()
+
+                    Text("\(Int(round(vol.freePercentage * 100)))% Free")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.purple)
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private var standardGeneralView: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header: Icon + Name TextField
             HStack(spacing: 12) {
@@ -278,6 +442,18 @@ public struct FilePropertiesModal: View {
                             Text("\(folderFileCount) Files, \(folderDirCount) Folders")
                                 .font(.system(size: 11))
                         }
+                    }
+                }
+
+                // Drive Capacity on Host Disk
+                if let vol = volumeDetail {
+                    GridRow {
+                        Text("Drive Space:")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Text("\(vol.freeFormatted) free of \(vol.totalFormatted) (\(vol.formatName))")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -572,8 +748,24 @@ public struct FilePropertiesModal: View {
             self.defaultAppName = "Unknown Application"
         }
 
+        // Determine if target is a Drive / Volume mount point
+        let isRoot = item.url.path == "/"
+        let isVolumePath = item.url.deletingLastPathComponent().path == "/Volumes" || (item.url.path.hasPrefix("/Volumes/") && item.isDirectory)
+        self.isDriveVolume = isRoot || isVolumePath
+
+        Task {
+            if let vol = await FileSystemManager.shared.getVolumeStorageInfo(for: item.url) {
+                await MainActor.run {
+                    self.volumeDetail = vol
+                    if isRoot || isVolumePath {
+                        self.isDriveVolume = true
+                    }
+                }
+            }
+        }
+
         // Recursive directory calculation
-        if item.isDirectory && !item.isPackage {
+        if item.isDirectory && !item.isPackage && !isDriveVolume {
             calculateFolderMetrics()
         }
     }

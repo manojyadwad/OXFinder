@@ -170,91 +170,7 @@ public struct NavigationSidebar: View {
     }
 
     private func volumeSidebarItem(volumeURL: URL) -> some View {
-        let isSelected = appState.activeTab.currentURL.standardizedFileURL == volumeURL.standardizedFileURL
-        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsEjectableKey, .volumeIsInternalKey]
-        let vals = try? volumeURL.resourceValues(forKeys: Set(keys))
-        let isRemovable = (vals?.volumeIsRemovable == true) || (vals?.volumeIsEjectable == true)
-        let rawName = vals?.volumeName ?? volumeURL.lastPathComponent
-        let displayName: String
-        if volumeURL.path == "/" {
-            displayName = "Macintosh HD"
-        } else if rawName.isEmpty {
-            displayName = volumeURL.lastPathComponent
-        } else {
-            displayName = rawName
-        }
-
-        let icon = isRemovable ? "externaldrive.connected.to.line.below.fill" : "internaldrive.fill"
-
-        return HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(isSelected ? .accentColor : (isRemovable ? .orange : .secondary))
-                .frame(width: 18)
-
-            Text(displayName)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-
-            if isRemovable {
-                Text("USB")
-                    .font(.system(size: 9, weight: .bold))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color.orange.opacity(0.18))
-                    .foregroundColor(.orange)
-                    .clipShape(Capsule())
-            }
-
-            Spacer()
-
-            if isRemovable {
-                Button(action: {
-                    appState.ejectVolume(volumeURL)
-                }) {
-                    Image(systemName: "eject.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .padding(3)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help("Eject \(displayName)")
-            }
-        }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            appState.navigate(to: volumeURL)
-        }
-        .contextMenu {
-            Button("Open") {
-                appState.navigate(to: volumeURL)
-            }
-            Button("Open in New Tab") {
-                appState.addTab(at: volumeURL)
-            }
-            if isRemovable {
-                Divider()
-                Button("Eject \(displayName)") {
-                    appState.ejectVolume(volumeURL)
-                }
-            }
-            Divider()
-            Button("Copy Path") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(volumeURL.path, forType: .string)
-            }
-            Divider()
-            Button("Properties") {
-                appState.showProperties(for: FileItem(url: volumeURL))
-            }
-        }
+        VolumeSidebarRow(volumeURL: volumeURL, appState: appState)
     }
 
     private func iconName(for url: URL) -> String {
@@ -368,3 +284,140 @@ public struct DirectoryTreeNodeView: View {
         }
     }
 }
+
+/// Dedicated sidebar row for storage volumes with live capacity gauge and free/total indicators
+public struct VolumeSidebarRow: View {
+    let volumeURL: URL
+    @ObservedObject var appState: AppState
+    @State private var storageDetail: VolumeStorageDetail? = nil
+
+    public var body: some View {
+        let isSelected = appState.activeTab.currentURL.standardizedFileURL == volumeURL.standardizedFileURL
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsEjectableKey, .volumeIsInternalKey]
+        let vals = try? volumeURL.resourceValues(forKeys: Set(keys))
+        let isRemovable = (vals?.volumeIsRemovable == true) || (vals?.volumeIsEjectable == true)
+        let rawName = vals?.volumeName ?? volumeURL.lastPathComponent
+        let displayName: String
+        if volumeURL.path == "/" {
+            displayName = "Macintosh HD"
+        } else if rawName.isEmpty {
+            displayName = volumeURL.lastPathComponent
+        } else {
+            displayName = rawName
+        }
+
+        let icon = isRemovable ? "externaldrive.connected.to.line.below.fill" : "internaldrive.fill"
+
+        return HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundColor(isSelected ? .accentColor : (isRemovable ? .orange : .secondary))
+                .font(.system(size: 14))
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(displayName)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    if isRemovable {
+                        Text("USB")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.18))
+                            .foregroundColor(.orange)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                if let info = storageDetail {
+                    HStack(spacing: 4) {
+                        // Mini capacity bar
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(Color(nsColor: .separatorColor))
+                                    .frame(height: 3)
+
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(
+                                        info.usedPercentage > 0.9 ? Color.red :
+                                            (isRemovable ? Color.orange : Color.accentColor)
+                                    )
+                                    .frame(width: max(2, min(geo.size.width, geo.size.width * CGFloat(info.usedPercentage))), height: 3)
+                            }
+                        }
+                        .frame(width: 36, height: 3)
+
+                        Text("\(info.freeFormatted) free of \(info.totalFormatted)")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            if isRemovable {
+                Button(action: {
+                    appState.ejectVolume(volumeURL)
+                }) {
+                    Image(systemName: "eject.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .padding(3)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Eject \(displayName)")
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            appState.navigate(to: volumeURL)
+        }
+        .help(tooltipText(name: displayName))
+        .contextMenu {
+            Button("Open") {
+                appState.navigate(to: volumeURL)
+            }
+            Button("Open in New Tab") {
+                appState.addTab(at: volumeURL)
+            }
+            if isRemovable {
+                Divider()
+                Button("Eject \(displayName)") {
+                    appState.ejectVolume(volumeURL)
+                }
+            }
+            Divider()
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(volumeURL.path, forType: .string)
+            }
+            Divider()
+            Button("Properties") {
+                appState.showProperties(for: FileItem(url: volumeURL))
+            }
+        }
+        .task(id: volumeURL) {
+            if let detail = await FileSystemManager.shared.getVolumeStorageInfo(for: volumeURL) {
+                self.storageDetail = detail
+            }
+        }
+    }
+
+    private func tooltipText(name: String) -> String {
+        guard let info = storageDetail else { return name }
+        return "\(name)\nTotal space: \(info.totalFormatted)\nUsed space: \(info.usedFormatted)\nFree space: \(info.freeFormatted)\nFormat: \(info.formatName)"
+    }
+}
+
